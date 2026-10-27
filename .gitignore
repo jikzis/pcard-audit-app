@@ -1,0 +1,9 @@
+# secrets - the Anthropic API key must never be committed
+.streamlit/secrets.toml
+.env
+
+# the uncompressed database (only data/pcards.db.gz is committed)
+*.db
+
+__pycache__/
+.venv/
