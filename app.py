@@ -290,16 +290,14 @@ def check_read_only(sql: str):
     return stripped
 
 
-def summarise(question: str, sql: str, df: pd.DataFrame) -> str:
-    sample = df.head(50).to_csv(index=False)
-    prompt = (f"Question: {question}\n\nSQL that was run:\n{sql}\n\n"
-              f"The query returned {len(df)} rows{' (truncated at 1000)' if len(df) == MAX_ROWS else ''}. "
-              f"First rows as CSV:\n{sample}\n\n"
-              "Answer the question for an internal auditor in 2-5 sentences using these results. "
-              "Quote the key numbers, and note when a flagged item is only a potential exception. "
-              "Do not invent numbers that are not in the results.")
-    return ask_claude([{"role": "user", "content": prompt}],
-                      "You are a concise internal-audit analyst.", "low")
+def describe_result(df: pd.DataFrame) -> str:
+    """Summarise the result locally - no transaction data is ever sent to the API."""
+    if df.empty:
+        return "The query returned no rows."
+    rows = f"{len(df):,} rows" + (" (only the first 1,000 are shown)" if len(df) == MAX_ROWS else "")
+    if len(df) == 1 and len(df.columns) == 1:
+        return f"**Answer:** {df.iat[0, 0]}"
+    return f"The query returned {rows}."
 
 
 def answer(question: str) -> dict:
@@ -320,7 +318,7 @@ def answer(question: str) -> dict:
                 return result
             plan = generate_sql(question, (plan["sql"], str(e)))
     result["data"] = df
-    result["answer"] = summarise(question, sql, df) if not df.empty else "The query returned no rows."
+    result["answer"] = f"{result['explanation']}\n\n{describe_result(df)}"
     return result
 
 
@@ -335,9 +333,11 @@ EXAMPLES = [
 
 def ask_tab():
     st.subheader("Ask the database")
-    st.markdown("Ask a question in plain English. Claude writes a SQL query, the app runs it on the "
-                "P-card database (read-only) and summarises the result. The query is shown so you can "
-                "check how the answer was produced.")
+    st.markdown("Ask a question in plain English. Claude writes a SQL query, and the app runs it on the "
+                "P-card database (read-only) and shows the result. The query is shown so you can check "
+                "how the answer was produced.")
+    st.caption("Privacy: only your question and a description of the table's columns are sent to Claude. "
+               "Transaction data never leaves this server.")
     if client() is None:
         st.error("No Anthropic API key is configured. Add `ANTHROPIC_API_KEY` to the app's secrets "
                  "(Streamlit Cloud: Settings → Secrets) or to `.streamlit/secrets.toml` when running locally.")
@@ -374,8 +374,7 @@ def ask_tab():
             if item.get("answer"):
                 st.markdown(item["answer"])
             if item.get("sql"):
-                with st.expander("SQL query and explanation"):
-                    st.caption(item.get("explanation", ""))
+                with st.expander("SQL query"):
                     st.code(item["sql"], language="sql")
             if "data" in item and not item["data"].empty:
                 st.dataframe(item["data"], use_container_width=True, hide_index=True)
