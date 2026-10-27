@@ -1,5 +1,6 @@
 """OSU P-card audit app: ask questions in natural language, and search for prohibited purchases."""
 import gzip
+import hmac
 import json
 import os
 import re
@@ -19,6 +20,40 @@ MAX_ROWS = 1000
 QUERY_TIMEOUT_S = 20
 
 st.set_page_config(page_title="P-card Audit", page_icon="🔎", layout="wide")
+
+
+# ---------------------------------------------------------------- access
+
+def secret(name: str) -> str | None:
+    try:
+        value = st.secrets.get(name)
+    except Exception:  # no secrets file locally
+        value = None
+    return value or os.environ.get(name)
+
+
+def require_password():
+    """Stop the script until the viewer has entered the app password (fails closed if none is set)."""
+    if st.session_state.get("authenticated"):
+        return
+    expected = secret("APP_PASSWORD")
+    st.title("🔎 OSU P-card Audit")
+    if not expected:
+        st.error("This app is locked: no `APP_PASSWORD` is configured in the app's secrets.")
+        st.stop()
+    with st.form("login"):
+        entered = st.text_input("Password", type="password")
+        submitted = st.form_submit_button("Open", type="primary")
+    if submitted:
+        if hmac.compare_digest(entered.encode(), expected.encode()):
+            st.session_state["authenticated"] = True
+            st.rerun()
+        time.sleep(2)  # slow down guessing
+        st.error("Wrong password.")
+    st.stop()
+
+
+require_password()
 
 
 # ---------------------------------------------------------------- database
@@ -256,11 +291,7 @@ SQL_SCHEMA = {
 
 @st.cache_resource
 def client():
-    key = os.environ.get("ANTHROPIC_API_KEY")
-    try:
-        key = st.secrets.get("ANTHROPIC_API_KEY", key)
-    except Exception:  # no secrets file locally
-        pass
+    key = secret("ANTHROPIC_API_KEY")
     return anthropic.Anthropic(api_key=key) if key else None
 
 

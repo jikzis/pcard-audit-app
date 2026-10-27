@@ -28,7 +28,7 @@ The database ships compressed as `data/pcards.db.gz` and is unpacked automatical
 1. Push this repository to GitHub.
 2. On [share.streamlit.io](https://share.streamlit.io), create an app from the repository with `app.py`
    as the main file.
-3. Under **Settings → Secrets**, add `ANTHROPIC_API_KEY = "..."`.
+3. Under **Settings → Secrets**, add `ANTHROPIC_API_KEY = "..."` and `APP_PASSWORD = "..."`.
 
 ## Security and privacy
 
@@ -37,7 +37,8 @@ The database ships compressed as `data/pcards.db.gz` and is unpacked automatical
   Transaction data is never sent; queries run only on the app's own server.
 - The dashboard tab makes no external calls.
 - Streamlit usage statistics are turned off in `.streamlit/config.toml`.
-- Deploy the app as a private app on Streamlit Community Cloud and invite only the people who need access.
+- Viewers must enter `APP_PASSWORD` before any data is shown or any question can be asked. The check runs
+  on the server, and the app stays locked if no password is configured.
 - The API key is read from Streamlit secrets or the `ANTHROPIC_API_KEY` environment variable. It is never
   stored in the source code, and `.streamlit/secrets.toml` is git-ignored.
 - Generated SQL is restricted to a single `SELECT`/`WITH` statement and runs on a read-only connection
