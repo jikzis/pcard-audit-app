@@ -52,6 +52,17 @@ def run_query(sql: str, params=()) -> pd.DataFrame:
         con.close()
 
 
+MONEY_NAME = re.compile(r"amount|total|spent|spend|sum|cost|price|value|avg|average|charge|fee|paid|payment|refund",
+                        re.I)
+NOT_MONEY_NAME = re.compile(r"count|transactions|number|month|year|^id$|pct|percent|ratio|times", re.I)
+
+
+def money_config(df: pd.DataFrame) -> dict:
+    """Show numeric columns that hold dollar amounts as $1,234.56."""
+    return {c: st.column_config.NumberColumn(format="dollar") for c in df.columns
+            if pd.api.types.is_float_dtype(df[c]) and MONEY_NAME.search(c) and not NOT_MONEY_NAME.search(c)}
+
+
 @st.cache_data
 def years() -> list[int]:
     return run_query("SELECT DISTINCT Year FROM pcards ORDER BY Year DESC")["Year"].tolist()
@@ -114,7 +125,7 @@ def show_results(df: pd.DataFrame, keyword: str, field: str, year: int, key: str
         st.caption(f"Showing the {MAX_ROWS:,} largest transactions. Use a more specific keyword to narrow the search.")
 
     st.dataframe(df, use_container_width=True, hide_index=True,
-                 column_config={"Amount": st.column_config.NumberColumn(format="$%.2f")})
+                 column_config=money_config(df))
 
     with st.expander("Follow-up: totals by cardholder"):
         by_holder = (df.groupby("FullName")
@@ -122,7 +133,7 @@ def show_results(df: pd.DataFrame, keyword: str, field: str, year: int, key: str
                           Vendors=("Vendor", "nunique"))
                      .sort_values("Total", ascending=False).reset_index())
         st.dataframe(by_holder, use_container_width=True, hide_index=True,
-                     column_config={"Total": st.column_config.NumberColumn(format="$%.2f")})
+                     column_config=money_config(by_holder))
 
     st.download_button("Download results (CSV)", df.to_csv(index=False).encode("utf-8"),
                        file_name=f"pcard_{field.lower()}_{keyword.strip().replace(' ', '_')}_{year}.csv",
@@ -377,7 +388,8 @@ def ask_tab():
                 with st.expander("SQL query"):
                     st.code(item["sql"], language="sql")
             if "data" in item and not item["data"].empty:
-                st.dataframe(item["data"], use_container_width=True, hide_index=True)
+                st.dataframe(item["data"], use_container_width=True, hide_index=True,
+                             column_config=money_config(item["data"]))
                 st.download_button("Download (CSV)", item["data"].to_csv(index=False).encode("utf-8"),
                                    file_name="pcard_query.csv", mime="text/csv", key=f"nl_dl_{i}")
 
